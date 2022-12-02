@@ -3,32 +3,152 @@
 #endif 
 
 #include <Windows.h>
-//#include <CommCtrl.h>
 
-// these are used to ID the controls/windows, and are used to execute an event (e.g. click)
-#define IDM_ABOUT   104
+/**************************************************************************************************
+ * Text editor
+ *************************************************************************************************/
+
+ // these are used to ID the controls/windows, and are used to execute an event (e.g. click)
 #define IDM_EDUNDO  111
 #define IDM_EDCUT   112
 #define IDM_EDCOPY  113
 #define IDM_EDPASTE 114
 #define IDM_EDDEL   115
 
-LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+#define ID_EDITCHILD 100
 
-HINSTANCE hInst;
+LRESULT CALLBACK WindowProcEdit(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+    LRESULT result = 0;
+
+    static HWND hwndConsole;
+    static HWND hwndInput;
+
+    switch (uMsg)
+    {
+        case WM_CREATE:
+        {
+            TCHAR lpszLatin[] = L"Lorem ipsum dolor sit amet, consectetur "
+                L"adipisicing elit, sed do eiusmod tempor "
+                L"incididunt ut labore et dolore magna "
+                L"aliqua. Ut enim ad minim veniam, quis "
+                L"nostrud exercitation ullamco laboris nisi "
+                L"ut aliquip ex ea commodo consequat. Duis "
+                L"aute irure dolor in reprehenderit in "
+                L"voluptate velit esse cillum dolore eu "
+                L"fugiat nulla pariatur. Excepteur sint "
+                L"occaecat cupidatat non proident, sunt "
+                L"in culpa qui officia deserunt mollit "
+                L"anim id est laborum.";
+
+            hwndConsole = CreateWindowEx(
+                0, L"EDIT",   // predefined class 
+                NULL,         // no window title 
+                WS_CHILD | WS_VISIBLE | WS_VSCROLL | /*WS_HSCROLL |*/
+                ES_LEFT | ES_MULTILINE | ES_AUTOVSCROLL | ES_AUTOHSCROLL,
+                0, 0, 0, 0,   // set size in WM_SIZE message 
+                hwnd,         // parent window 
+                (HMENU)ID_EDITCHILD,   // edit control ID 
+                (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE),
+                NULL);        // pointer not needed 
+
+            hwndInput = CreateWindowEx(
+                0, L"EDIT",   // predefined class 
+                NULL,         // no window title 
+                WS_CHILD | WS_VISIBLE | 
+                ES_LEFT | ES_AUTOHSCROLL,
+                0, 0, 0, 0,   // set size in WM_SIZE message 
+                hwnd,         // parent window 
+                (HMENU)ID_EDITCHILD,   // edit control ID 
+                (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE),
+                NULL);        // pointer not needed
+
+            // Add text to the window. 
+            SendMessage(hwndConsole, WM_SETTEXT, 0, (LPARAM)lpszLatin);
+            SendMessage(hwndInput, WM_SETTEXT, 0, (LPARAM)L"Input text");
+        }
+        break;
+
+        case WM_COMMAND:
+        {
+            switch (wParam)
+            {
+            case IDM_EDUNDO:
+                // Send WM_UNDO only if there is something to be undone. 
+
+                if (SendMessage(hwndConsole, EM_CANUNDO, 0, 0))
+                    SendMessage(hwndConsole, WM_UNDO, 0, 0);
+                else
+                {
+                    MessageBox(hwndConsole,
+                        L"Nothing to undo.",
+                        L"Undo notification",
+                        MB_OK);
+                }
+                break;
+
+            case IDM_EDCUT:
+                SendMessage(hwndConsole, WM_CUT, 0, 0);
+                break;
+
+            case IDM_EDCOPY:
+                SendMessage(hwndConsole, WM_COPY, 0, 0);
+                break;
+
+            case IDM_EDPASTE:
+                SendMessage(hwndConsole, WM_PASTE, 0, 0);
+                break;
+
+            case IDM_EDDEL:
+                SendMessage(hwndConsole, WM_CLEAR, 0, 0);
+                break;
+            }
+        }
+        break;
+
+        case WM_SETFOCUS:
+        {
+            SetFocus(hwndConsole);
+        }
+        break;
+
+        case WM_SIZE:
+        {
+            // Make the edit control the size of the window's client area. 
+
+            MoveWindow(hwndInput,
+                4,     // starting x-
+                HIWORD(lParam) - 4 - 18,// and y-coordinates 
+                LOWORD(lParam) - 8,     // width of client area 
+                HIWORD(lParam) - 23,    // height of client area 
+                TRUE);                  // repaint window 
+
+            MoveWindow(hwndConsole,
+                4, 4,                  // starting x- and y-coordinates 
+                LOWORD(lParam) - 8,    // width of client area 
+                HIWORD(lParam) - 8  - 4 - 18,    // height of client area 
+                TRUE);                 // repaint window 
+        }
+        break;
+    }
+
+    return result;
+};
+
+/**************************************************************************************************
+ * Main window
+ *************************************************************************************************/
+
+LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR pCmdLine, int nCmdShow)
 {
-    hInst = hInstance;
-
     // Register the window class.
-    const wchar_t CLASS_NAME[] = L"Sample Window Class";
-
     WNDCLASS wc = { };
 
     wc.lpfnWndProc = WindowProc;
     wc.hInstance = hInstance;
-    wc.lpszClassName = CLASS_NAME;
+    wc.lpszClassName = L"Main window";
 
     RegisterClass(&wc);
 
@@ -36,8 +156,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR pCmdLine, int nCmdShow
 
     HWND hwnd = CreateWindowEx(
         0,                              // Optional window styles.
-        CLASS_NAME,                     // Window class
-        L"RegExMicro",                  // Window text
+        wc.lpszClassName,               // Window class
+        L"RegExMicro v0.0.1",           // Window text
         WS_OVERLAPPEDWINDOW,            // Window style
 
         // Size and position
@@ -67,109 +187,16 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR pCmdLine, int nCmdShow
     return 0;
 }
 
-#define ID_EDITCHILD 100
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
     LRESULT result = 0;
 
-    static HWND hwndEdit; 
- 
-    TCHAR lpszLatin[] =  L"Lorem ipsum dolor sit amet, consectetur "
-                         L"adipisicing elit, sed do eiusmod tempor " 
-                         L"incididunt ut labore et dolore magna " 
-                         L"aliqua. Ut enim ad minim veniam, quis " 
-                         L"nostrud exercitation ullamco laboris nisi " 
-                         L"ut aliquip ex ea commodo consequat. Duis " 
-                         L"aute irure dolor in reprehenderit in " 
-                         L"voluptate velit esse cillum dolore eu " 
-                         L"fugiat nulla pariatur. Excepteur sint " 
-                         L"occaecat cupidatat non proident, sunt " 
-                         L"in culpa qui officia deserunt mollit " 
-                         L"anim id est laborum."; 
+    result = WindowProcEdit(hwnd, uMsg, wParam, lParam);
+    if (result) return result;
 
     switch (uMsg)
     {
-        case WM_CREATE:
-        {
-            hwndEdit = CreateWindowEx(
-                0, L"EDIT",   // predefined class 
-                NULL,         // no window title 
-                WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_HSCROLL |
-                ES_LEFT | ES_MULTILINE | ES_AUTOVSCROLL | ES_AUTOHSCROLL,
-                0, 0, 0, 0,   // set size in WM_SIZE message 
-                hwnd,         // parent window 
-                (HMENU)ID_EDITCHILD,   // edit control ID 
-                (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE),
-                NULL);        // pointer not needed 
-
-            // Add text to the window. 
-            SendMessage(hwndEdit, WM_SETTEXT, 0, (LPARAM)lpszLatin);
-        }
-        break;
-
-        case WM_COMMAND:
-        {
-            switch (wParam)
-            {
-            case IDM_EDUNDO:
-                // Send WM_UNDO only if there is something to be undone. 
-
-                if (SendMessage(hwndEdit, EM_CANUNDO, 0, 0))
-                    SendMessage(hwndEdit, WM_UNDO, 0, 0);
-                else
-                {
-                    MessageBox(hwndEdit,
-                        L"Nothing to undo.",
-                        L"Undo notification",
-                        MB_OK);
-                }
-                break;
-
-            case IDM_EDCUT:
-                SendMessage(hwndEdit, WM_CUT, 0, 0);
-                break;
-
-            case IDM_EDCOPY:
-                SendMessage(hwndEdit, WM_COPY, 0, 0);
-                break;
-
-            case IDM_EDPASTE:
-                SendMessage(hwndEdit, WM_PASTE, 0, 0);
-                break;
-
-            case IDM_EDDEL:
-                SendMessage(hwndEdit, WM_CLEAR, 0, 0);
-                break;
-
-            case IDM_ABOUT:
-                DialogBox(hInst,                // current instance 
-                    L"AboutBox",           // resource to use 
-                    hwnd,                 // parent handle 
-                    MB_OK);
-                break;
-            }
-        }
-        break;
-
-        case WM_SETFOCUS:
-        {
-            SetFocus(hwndEdit);
-        }
-        break;
-
-        case WM_SIZE:
-        {
-            // Make the edit control the size of the window's client area. 
-
-            MoveWindow(hwndEdit,
-                0, 0,                  // starting x- and y-coordinates 
-                LOWORD(lParam),        // width of client area 
-                HIWORD(lParam),        // height of client area 
-                TRUE);                 // repaint window 
-        }
-        break;
-
         case WM_DESTROY:
         {
             PostQuitMessage(0);
@@ -182,7 +209,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
             HDC hdc = BeginPaint(hwnd, &ps);
 
             // All painting occurs here, between BeginPaint and EndPaint.
-            FillRect(hdc, &ps.rcPaint, (HBRUSH)(COLOR_WINDOW + 1));
+            FillRect(hdc, &ps.rcPaint, (HBRUSH)(COLOR_WINDOW));
             EndPaint(hwnd, &ps);
         }
         break;
