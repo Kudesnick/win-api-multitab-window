@@ -3,6 +3,7 @@
 #endif 
 
 #include <Windows.h>
+#include <commctrl.h>
 #include "resource.h"
 
 static BOOL get_text_size(HWND hwnd, LPSIZE size)
@@ -30,12 +31,14 @@ constexpr WORD PADDING = 4;
 #define IDM_EDPASTE 114
 #define IDM_EDDEL   115
 
+#define ID_TABCTRL   101
 #define ID_EDITCHILD 100
 
 LRESULT CALLBACK WindowProcEdit(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
     LRESULT result = 0;
 
+    static HWND hwndTab;
     static HWND hwndConsole;
     static HWND hwndInput;
     static HWND hwndSend;
@@ -44,6 +47,35 @@ LRESULT CALLBACK WindowProcEdit(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
     {
         case WM_CREATE:
         {
+            //INITCOMMONCONTROLSEX icex;
+            //icex.dwSize = sizeof(INITCOMMONCONTROLSEX);
+            //icex.dwICC = ICC_TAB_CLASSES;
+            //InitCommonControlsEx(&icex);
+
+            hwndTab = CreateWindowEx(
+                0, WC_TABCONTROL,
+                NULL,
+                WS_CHILD | WS_VISIBLE,
+                0, 0, 400, 150,
+                hwnd,
+                (HMENU)ID_TABCTRL,
+                (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE),
+                NULL);
+
+            TCITEM tie;
+            tie.mask = TCIF_TEXT | TCIF_IMAGE;
+            TCHAR achTemp[] = L"tabtext long long";
+            tie.pszText = achTemp;
+            tie.iImage = -1;
+            tie.dwState = TCIS_BUTTONPRESSED;
+            auto count = SendMessageW(hwndTab, TCM_GETITEMCOUNT, 0, 0);
+            SendMessageW(hwndTab, TCM_INSERTITEMW, count, (LPARAM)(LPTCITEM)&tie);
+
+            count = SendMessageW(hwndTab, TCM_GETITEMCOUNT, 0, 0);
+            SendMessageW(hwndTab, TCM_INSERTITEMW, count, (LPARAM)(LPTCITEM)&tie);
+
+
+
             LPCWSTR lpszLatin = L"Lorem ipsum dolor sit amet, consectetur "
                 L"adipisicing elit, sed do eiusmod tempor "
                 L"incididunt ut labore et dolore magna "
@@ -58,9 +90,9 @@ LRESULT CALLBACK WindowProcEdit(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                 L"anim id est laborum.";
 
             hwndConsole = CreateWindowEx(
-                0, L"EDIT",   // predefined class 
+                0, WC_EDIT,   // predefined class 
                 lpszLatin,         // no window title 
-                WS_CHILD | WS_VISIBLE | WS_VSCROLL | /*WS_HSCROLL |*/
+                WS_CHILD | /*WS_VISIBLE |*/ WS_VSCROLL |
                 ES_LEFT | ES_MULTILINE | ES_AUTOVSCROLL | ES_AUTOHSCROLL,
                 0, 0, 0, 0,   // set size in WM_SIZE message 
                 hwnd,         // parent window 
@@ -69,7 +101,7 @@ LRESULT CALLBACK WindowProcEdit(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                 NULL);        // pointer not needed 
 
             hwndInput = CreateWindowEx(
-                0, L"EDIT",   // predefined class 
+                0, WC_EDIT,   // predefined class 
                 L"Input text",         // no window title 
                 WS_CHILD | WS_VISIBLE | 
                 ES_LEFT | ES_AUTOHSCROLL,
@@ -80,7 +112,7 @@ LRESULT CALLBACK WindowProcEdit(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                 NULL);        // pointer not needed
 
             hwndSend = CreateWindowEx(
-                0, L"BUTTON",  // Predefined class; Unicode assumed 
+                0, WC_BUTTON,  // Predefined class; Unicode assumed 
                 L"SEND >>",    // Button text 
                 WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,  // Styles 
                 0, 0, 0, 0,   // set size in WM_SIZE message 
@@ -98,15 +130,15 @@ LRESULT CALLBACK WindowProcEdit(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
             SIZE size;
             get_text_size(hwndSend, &size);
 
-            const WORD TXTH = size.cy + PADDING;
-            const WORD BTNW = size.cx + PADDING;
+            const auto TXTH = size.cy + PADDING;
+            const auto BTNW = size.cx + PADDING;
 
             MoveWindow(hwndSend,
                 LOWORD(lParam) - MARGIN - BTNW,     // starting x-
                 HIWORD(lParam) - MARGIN - TXTH,// and y-coordinates 
-                BTNW,     // width of client area 
-                TXTH,    // height of client area 
-                TRUE);                  // repaint window 
+                BTNW,     // width of client area
+                TXTH,    // height of client area
+                TRUE);                  // repaint window
 
             MoveWindow(hwndInput,
                 MARGIN,     // starting x-
@@ -133,7 +165,7 @@ LRESULT CALLBACK WindowProcEdit(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
-int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR pCmdLine, int nCmdShow)
+int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow)
 {
     // Register the window class.
     WNDCLASS wc = { };
@@ -148,10 +180,10 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR pCmdLine, int nCmdShow
     // Create the window.
 
     HWND hwnd = CreateWindowEx(
-        0,                              // Optional window styles.
-        wc.lpszClassName,               // Window class
-        L"RegExMicro v0.0.1",           // Window text
-        WS_OVERLAPPEDWINDOW,            // Window style
+        0,                                // Optional window styles.
+        wc.lpszClassName,                 // Window class
+        L"RegExMicro v0.0.1",             // Window text
+        WS_OVERLAPPEDWINDOW | WS_VISIBLE, // Window style
 
         // Size and position
         CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
