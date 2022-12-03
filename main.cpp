@@ -3,6 +3,21 @@
 #endif 
 
 #include <Windows.h>
+#include "resource.h"
+
+static BOOL get_text_size(HWND hwnd, LPSIZE size)
+{
+    int length = (int)SendMessage(hwnd, WM_GETTEXTLENGTH, 0, 0);
+    if (!length) return false;
+
+    LPCWSTR buf = new WCHAR[length + 1];
+    SendMessage(hwnd, WM_GETTEXT, length + 1, (LPARAM)buf);
+
+    return GetTextExtentPoint32W(GetDC(hwnd), buf, length, size);
+}
+
+constexpr WORD MARGIN = 8;
+constexpr WORD PADDING = 4;
 
 /**************************************************************************************************
  * Text editor
@@ -23,12 +38,13 @@ LRESULT CALLBACK WindowProcEdit(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
     static HWND hwndConsole;
     static HWND hwndInput;
+    static HWND hwndSend;
 
     switch (uMsg)
     {
         case WM_CREATE:
         {
-            TCHAR lpszLatin[] = L"Lorem ipsum dolor sit amet, consectetur "
+            LPCWSTR lpszLatin = L"Lorem ipsum dolor sit amet, consectetur "
                 L"adipisicing elit, sed do eiusmod tempor "
                 L"incididunt ut labore et dolore magna "
                 L"aliqua. Ut enim ad minim veniam, quis "
@@ -43,7 +59,7 @@ LRESULT CALLBACK WindowProcEdit(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
             hwndConsole = CreateWindowEx(
                 0, L"EDIT",   // predefined class 
-                NULL,         // no window title 
+                lpszLatin,         // no window title 
                 WS_CHILD | WS_VISIBLE | WS_VSCROLL | /*WS_HSCROLL |*/
                 ES_LEFT | ES_MULTILINE | ES_AUTOVSCROLL | ES_AUTOHSCROLL,
                 0, 0, 0, 0,   // set size in WM_SIZE message 
@@ -54,7 +70,7 @@ LRESULT CALLBACK WindowProcEdit(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
             hwndInput = CreateWindowEx(
                 0, L"EDIT",   // predefined class 
-                NULL,         // no window title 
+                L"Input text",         // no window title 
                 WS_CHILD | WS_VISIBLE | 
                 ES_LEFT | ES_AUTOHSCROLL,
                 0, 0, 0, 0,   // set size in WM_SIZE message 
@@ -63,52 +79,15 @@ LRESULT CALLBACK WindowProcEdit(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                 (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE),
                 NULL);        // pointer not needed
 
-            // Add text to the window. 
-            SendMessage(hwndConsole, WM_SETTEXT, 0, (LPARAM)lpszLatin);
-            SendMessage(hwndInput, WM_SETTEXT, 0, (LPARAM)L"Input text");
-        }
-        break;
-
-        case WM_COMMAND:
-        {
-            switch (wParam)
-            {
-            case IDM_EDUNDO:
-                // Send WM_UNDO only if there is something to be undone. 
-
-                if (SendMessage(hwndConsole, EM_CANUNDO, 0, 0))
-                    SendMessage(hwndConsole, WM_UNDO, 0, 0);
-                else
-                {
-                    MessageBox(hwndConsole,
-                        L"Nothing to undo.",
-                        L"Undo notification",
-                        MB_OK);
-                }
-                break;
-
-            case IDM_EDCUT:
-                SendMessage(hwndConsole, WM_CUT, 0, 0);
-                break;
-
-            case IDM_EDCOPY:
-                SendMessage(hwndConsole, WM_COPY, 0, 0);
-                break;
-
-            case IDM_EDPASTE:
-                SendMessage(hwndConsole, WM_PASTE, 0, 0);
-                break;
-
-            case IDM_EDDEL:
-                SendMessage(hwndConsole, WM_CLEAR, 0, 0);
-                break;
-            }
-        }
-        break;
-
-        case WM_SETFOCUS:
-        {
-            SetFocus(hwndConsole);
+            hwndSend = CreateWindowEx(
+                0, L"BUTTON",  // Predefined class; Unicode assumed 
+                L"SEND >>",    // Button text 
+                WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,  // Styles 
+                0, 0, 0, 0,   // set size in WM_SIZE message 
+                hwnd,         // parent window 
+                NULL,       // No menu.
+                (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE),
+                NULL);      // Pointer not needed.
         }
         break;
 
@@ -116,17 +95,30 @@ LRESULT CALLBACK WindowProcEdit(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         {
             // Make the edit control the size of the window's client area. 
 
+            SIZE size;
+            get_text_size(hwndSend, &size);
+
+            const WORD TXTH = size.cy + PADDING;
+            const WORD BTNW = size.cx + PADDING;
+
+            MoveWindow(hwndSend,
+                LOWORD(lParam) - MARGIN - BTNW,     // starting x-
+                HIWORD(lParam) - MARGIN - TXTH,// and y-coordinates 
+                BTNW,     // width of client area 
+                TXTH,    // height of client area 
+                TRUE);                  // repaint window 
+
             MoveWindow(hwndInput,
-                4,     // starting x-
-                HIWORD(lParam) - 4 - 18,// and y-coordinates 
-                LOWORD(lParam) - 8,     // width of client area 
-                HIWORD(lParam) - 23,    // height of client area 
+                MARGIN,     // starting x-
+                HIWORD(lParam) - MARGIN - TXTH,// and y-coordinates 
+                LOWORD(lParam) - 3 * MARGIN - BTNW,     // width of client area 
+                TXTH,    // height of client area 
                 TRUE);                  // repaint window 
 
             MoveWindow(hwndConsole,
-                4, 4,                  // starting x- and y-coordinates 
-                LOWORD(lParam) - 8,    // width of client area 
-                HIWORD(lParam) - 8  - 4 - 18,    // height of client area 
+                MARGIN, MARGIN,                 // starting x- and y-coordinates 
+                LOWORD(lParam) - 2 * MARGIN,    // width of client area 
+                HIWORD(lParam) - 3 * MARGIN - TXTH,    // height of client area 
                 TRUE);                 // repaint window 
         }
         break;
@@ -149,6 +141,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR pCmdLine, int nCmdShow
     wc.lpfnWndProc = WindowProc;
     wc.hInstance = hInstance;
     wc.lpszClassName = L"Main window";
+    wc.hIcon = (HICON)LoadImage(hInstance, MAKEINTRESOURCE(IDI_ICON1), IMAGE_ICON, 16, 16, 0);
 
     RegisterClass(&wc);
 
