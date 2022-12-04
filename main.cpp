@@ -56,17 +56,16 @@ LRESULT CALLBACK WindowProcEdit(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                 0, WC_TABCONTROL,
                 NULL,
                 WS_CHILD | WS_VISIBLE,
-                0, 0, 400, 150,
+                0, 0, 0, 0,
                 hwnd,
                 (HMENU)ID_TABCTRL,
                 (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE),
                 NULL);
 
             TCITEM tie;
-            tie.mask = TCIF_TEXT | TCIF_IMAGE;
+            tie.mask = TCIF_TEXT;
             TCHAR achTemp[] = L"tabtext long long";
             tie.pszText = achTemp;
-            tie.iImage = -1;
             tie.dwState = TCIS_BUTTONPRESSED;
             auto count = SendMessageW(hwndTab, TCM_GETITEMCOUNT, 0, 0);
             SendMessageW(hwndTab, TCM_INSERTITEMW, count, (LPARAM)(LPTCITEM)&tie);
@@ -146,6 +145,12 @@ LRESULT CALLBACK WindowProcEdit(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                 LOWORD(lParam) - 3 * MARGIN - BTNW,     // width of client area 
                 TXTH,    // height of client area 
                 TRUE);                  // repaint window 
+
+            MoveWindow(hwndTab,
+                MARGIN, MARGIN,                 // starting x- and y-coordinates 
+                LOWORD(lParam) - 2 * MARGIN,    // width of client area 
+                HIWORD(lParam) - 3 * MARGIN - TXTH,    // height of client area 
+                TRUE);                 // repaint window 
 
             MoveWindow(hwndConsole,
                 MARGIN, MARGIN,                 // starting x- and y-coordinates 
