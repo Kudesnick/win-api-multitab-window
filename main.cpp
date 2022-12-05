@@ -6,6 +6,8 @@
 #include <commctrl.h>
 #include "resource.h"
 
+#pragma comment (lib, "comctl32")
+
 static BOOL get_text_size(HWND hwnd, LPSIZE size)
 {
     int length = (int)SendMessage(hwnd, WM_GETTEXTLENGTH, 0, 0);
@@ -17,8 +19,8 @@ static BOOL get_text_size(HWND hwnd, LPSIZE size)
     return GetTextExtentPoint32W(GetDC(hwnd), buf, length, size);
 }
 
-constexpr WORD MARGIN = 8;
-constexpr WORD PADDING = 4;
+constexpr WORD MARGIN = 4;
+constexpr WORD PADDING = 2;
 
 /**************************************************************************************************
  * Text editor
@@ -32,25 +34,28 @@ constexpr WORD PADDING = 4;
 #define IDM_EDDEL   115
 
 #define ID_TABCTRL   101
-#define ID_EDITCHILD 100
+#define ID_EDITCHILD 102
+#define ID_STATUS    103
 
 LRESULT CALLBACK WindowProcEdit(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
     LRESULT result = 0;
 
     static HWND hwndTab;
+    static HWND hwndNew;
     static HWND hwndConsole;
     static HWND hwndInput;
     static HWND hwndSend;
+    static HWND hwndStatus;
 
     switch (uMsg)
     {
         case WM_CREATE:
         {
-            //INITCOMMONCONTROLSEX icex;
-            //icex.dwSize = sizeof(INITCOMMONCONTROLSEX);
-            //icex.dwICC = ICC_TAB_CLASSES;
-            //InitCommonControlsEx(&icex);
+            INITCOMMONCONTROLSEX icex;
+            icex.dwSize = sizeof(INITCOMMONCONTROLSEX);
+            icex.dwICC = ICC_TAB_CLASSES;
+            InitCommonControlsEx(&icex);
 
             hwndTab = CreateWindowEx(
                 0, WC_TABCONTROL,
@@ -62,18 +67,30 @@ LRESULT CALLBACK WindowProcEdit(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                 (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE),
                 NULL);
 
+            SendMessageW(hwndTab, TCM_SETPADDING, 0, MAKELPARAM(PADDING, PADDING));
+
             TCITEM tie;
             tie.mask = TCIF_TEXT;
             TCHAR achTemp[] = L"tabtext long long";
             tie.pszText = achTemp;
+            tie.iImage = 1;
             tie.dwState = TCIS_BUTTONPRESSED;
+
             auto count = SendMessageW(hwndTab, TCM_GETITEMCOUNT, 0, 0);
             SendMessageW(hwndTab, TCM_INSERTITEMW, count, (LPARAM)(LPTCITEM)&tie);
 
             count = SendMessageW(hwndTab, TCM_GETITEMCOUNT, 0, 0);
             SendMessageW(hwndTab, TCM_INSERTITEMW, count, (LPARAM)(LPTCITEM)&tie);
 
-
+            hwndNew = CreateWindowEx(
+                0, WC_BUTTON,  // Predefined class; Unicode assumed 
+                L"NEW",    // Button text 
+                WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,  // Styles 
+                0, 0, 0, 0,   // set size in WM_SIZE message 
+                hwndTab,      // parent window 
+                NULL,       // No menu.
+                (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE),
+                NULL);      // Pointer not needed.
 
             LPCWSTR lpszLatin = L"Lorem ipsum dolor sit amet, consectetur "
                 L"adipisicing elit, sed do eiusmod tempor "
@@ -91,13 +108,13 @@ LRESULT CALLBACK WindowProcEdit(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
             hwndConsole = CreateWindowEx(
                 0, WC_EDIT,   // predefined class 
                 lpszLatin,         // no window title 
-                WS_CHILD | /*WS_VISIBLE |*/ WS_VSCROLL |
+                WS_CHILD | WS_VISIBLE | WS_VSCROLL |
                 ES_LEFT | ES_MULTILINE | ES_AUTOVSCROLL | ES_AUTOHSCROLL,
                 0, 0, 0, 0,   // set size in WM_SIZE message 
-                hwnd,         // parent window 
+                hwndTab,         // parent window 
                 (HMENU)ID_EDITCHILD,   // edit control ID 
                 (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE),
-                NULL);        // pointer not needed 
+                NULL);        // pointer not needed
 
             hwndInput = CreateWindowEx(
                 0, WC_EDIT,   // predefined class 
@@ -119,6 +136,16 @@ LRESULT CALLBACK WindowProcEdit(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                 NULL,       // No menu.
                 (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE),
                 NULL);      // Pointer not needed.
+
+            hwndStatus = CreateWindowEx(
+                0, STATUSCLASSNAME,
+                L"Status bar",
+                SBARS_SIZEGRIP | WS_CHILD | WS_VISIBLE,
+                0, 0, 0, 0,   // set size in WM_SIZE message 
+                hwnd,
+                (HMENU)ID_STATUS, 
+                (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE),
+                NULL);        // pointer not needed
         }
         break;
 
@@ -129,19 +156,26 @@ LRESULT CALLBACK WindowProcEdit(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
             SIZE size;
             get_text_size(hwndSend, &size);
 
-            const auto TXTH = size.cy + PADDING;
-            const auto BTNW = size.cx + PADDING;
+            const auto TXTH = size.cy + 2 * PADDING;
+            const auto BTNW = size.cx + 4 * PADDING;
+
+            MoveWindow(hwndStatus,
+                0,     // starting x-
+                HIWORD(lParam) - TXTH,// and y-coordinates 
+                LOWORD(lParam),     // width of client area
+                TXTH,    // height of client area
+                TRUE);   // repaint window
 
             MoveWindow(hwndSend,
                 LOWORD(lParam) - MARGIN - BTNW,     // starting x-
-                HIWORD(lParam) - MARGIN - TXTH,// and y-coordinates 
+                HIWORD(lParam) - MARGIN - 2 * TXTH,// and y-coordinates 
                 BTNW,     // width of client area
                 TXTH,    // height of client area
                 TRUE);                  // repaint window
 
             MoveWindow(hwndInput,
                 MARGIN,     // starting x-
-                HIWORD(lParam) - MARGIN - TXTH,// and y-coordinates 
+                HIWORD(lParam) - MARGIN - 2 * TXTH,// and y-coordinates 
                 LOWORD(lParam) - 3 * MARGIN - BTNW,     // width of client area 
                 TXTH,    // height of client area 
                 TRUE);                  // repaint window 
@@ -149,13 +183,31 @@ LRESULT CALLBACK WindowProcEdit(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
             MoveWindow(hwndTab,
                 MARGIN, MARGIN,                 // starting x- and y-coordinates 
                 LOWORD(lParam) - 2 * MARGIN,    // width of client area 
-                HIWORD(lParam) - 3 * MARGIN - TXTH,    // height of client area 
+                HIWORD(lParam) - 3 * MARGIN - 2 * TXTH,    // height of client area 
                 TRUE);                 // repaint window 
 
+            HWND prnt = GetParent(hwndConsole);
+            RECT prntItemRc;
+            TabCtrl_GetItemRect(prnt, 0, &prntItemRc);
+            RECT prntRc;
+            GetClientRect(prnt, &prntRc);
+
             MoveWindow(hwndConsole,
-                MARGIN, MARGIN,                 // starting x- and y-coordinates 
-                LOWORD(lParam) - 2 * MARGIN,    // width of client area 
-                HIWORD(lParam) - 3 * MARGIN - TXTH,    // height of client area 
+                2, // starting x- 
+                prntItemRc.bottom + 2, // and y-coordinates 
+                prntRc.right - 4,    // width of client area 
+                prntRc.bottom - prntItemRc.bottom - 4,    // height of client area 
+                TRUE);                 // repaint window 
+
+            get_text_size(hwndNew, &size);
+            size.cx += 4 * PADDING;
+            size.cy += 2 * PADDING;
+
+            MoveWindow(hwndNew,
+                prntRc.right - size.cx, // starting x- 
+                0, // and y-coordinates 
+                size.cx,    // width of client area 
+                size.cy,    // height of client area 
                 TRUE);                 // repaint window 
         }
         break;
@@ -172,6 +224,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow)
 {
+    HMENU hMenubar = CreateMenu();
+    HMENU hMenu = CreateMenu();
+
+    AppendMenuW(hMenu, MF_STRING, 0, L"&New");
+    AppendMenuW(hMenu, MF_STRING, 0, L"&Open");
+    AppendMenuW(hMenubar, MF_POPUP, (UINT_PTR)hMenu, L"&File");
+
     // Register the window class.
     WNDCLASS wc = { };
 
@@ -194,10 +253,12 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
         CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
 
         NULL,       // Parent window    
-        NULL,       // Menu
+        hMenubar,   // Menu
         hInstance,  // Instance handle
         NULL        // Additional application data
     );
+
+    wc.hIcon = (HICON)LoadImage(hInstance, MAKEINTRESOURCE(IDI_ICON1), IMAGE_ICON, 0, 0, LR_SHARED);
 
     if (hwnd == NULL)
     {
